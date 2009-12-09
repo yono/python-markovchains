@@ -9,17 +9,19 @@ import MeCab
 class MarkovChains(object):
 
     def __init__(self):
-        self.dbname = 'markov'
+        self.dbname = '.markov.db'
         BASE_DIR = os.environ['HOME']
-        dbfile = os.path.join(BASE_DIR,'.markov.db')
+        dbfile = os.path.join(BASE_DIR,self.dbname)
         if os.path.exists(dbfile):
-            self.db = sqlite3.connect(os.path.join(BASE_DIR,'.markov.db'))
+            self.db = sqlite3.connect(os.path.join(BASE_DIR,self.dbname))
         else:
-            self.db = sqlite3.connect(os.path.join(BASE_DIR,'.markov.db'))
+            self.db = sqlite3.connect(os.path.join(BASE_DIR,self.dbname))
             self.init_tables()
         self.mecab = MeCab.Tagger()
-        self.words = self.get_allwords()
-        self.chains = self.get_allchain()
+        #self.words = self.get_allwords()
+        #self.chains = self.get_allchain()
+        self.words = {}
+        self.chains = {}
     
     def init_tables(self):
         self.init_user()
@@ -91,7 +93,11 @@ class MarkovChains(object):
     def regist_sentence(self,sentence,user=''):
         cur = self.db
         mecab = self.mecab
+        if len(self.words) == 0:
+            self.words = self.get_allwords()
         allwords = self.words
+        if len(self.chains) == 0:
+            self.chains = self.get_allchain()
         chains = self.chains
         u = unicode
 
@@ -169,6 +175,7 @@ class MarkovChains(object):
             ''', (ids))
         
         cur.commit()
+
     def make_sentence(self,user=''):
         limit = 20
         cur = self.db
@@ -223,12 +230,13 @@ class MarkovChains(object):
             wordid = [wordid[1],wordid[2],nextid]
             #if nextid in stopid:
             #    break
-            if count > limit:
+            if count > limit and nextid in kutouten:
                 break
             count += 1
         
         ## idを基に実際の文章を生成 
         sentence = ''
+        print len(sentenceid)
         for i in xrange(len(sentenceid)):
             row = cur.execute('select name from word where id = ?'\
                     ,(sentenceid[i],))
