@@ -27,8 +27,8 @@ class MarkovChains(object):
 
         if is_exist:
             self.db.execute('use %s' % (dbname))
-        else: # db作成
-            print 'db作成'
+        else:
+            print 'create db'
             self.db.execute('create database %s default character set utf8' %\
                     (dbname))
             self.db.execute('use %s' % (dbname))
@@ -37,6 +37,10 @@ class MarkovChains(object):
         self.mecab = MeCab.Tagger()
         self.words = {}
         self.chains = {}
+
+        self.newwords = {}
+        self.newchains = {}
+        self.newuserchains = {}
 
     def init_tables(self):
         self.init_user()
@@ -104,7 +108,9 @@ class MarkovChains(object):
     def get_allchain(self):
         db = self.db
         db.execute('''
-        select word1_id,word2_id,word3_id from chain
+        select w1.name,w2.name,w3.name,c.isstart 
+        from word w1,word w2,word w3,chain c
+        where w1.id = c.word1_id and w2.id = c.word2_id and w3.id = c.word3_id
         ''')
         rows = db.fetchall()
         words = dict(zip(rows,range(len(rows))))
@@ -113,8 +119,10 @@ class MarkovChains(object):
     def get_userchain(self,userid):
         db = self.db
         db.execute('''
-        select c.word1_id,c.word2_id,c.word3_id from chain c,userchain uc
+        select w1.name,w2.name,w3.name,c.isstart 
+        from word w1,word w2,word w3,chain c,userchain uc
         where uc.user_id = %d and uc.chain_id = c.id
+        and w1.id = c.word1_id and w2.id = c.word2_id and w3.id = c.word3_id
         ''' % (userid))
         rows = db.fetchall()
         words = dict(zip(rows,range(len(rows))))
@@ -132,6 +140,62 @@ class MarkovChains(object):
                     kutouten[int(row[0])] = 0
         return kutouten
 
+    def regist_newdata(self):
+        cur = self.db
+        print 'register words'
+        sql = ['("%s")' % (MySQLdb.escape_string(x[0])) for x in \
+                self.newwords if x[0] not in self.words]
+     
+        if sql:
+            cur.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
+        allwords = self.get_allwords()
+
+        print 'register chain'
+        sql = []
+        for chain in self.newchains:
+            id0 = allwords[chain[0]]
+            id1 = allwords[chain[1]]
+            id2 = allwords[chain[2]]
+            isstart = chain[3]
+            sql.append("(%d,%d,%d,%d)" % (id0,id1,id2,isstart))
+
+            if (len(sql) % 1000) == 0:
+                cur.execute('''
+                insert into chain(word1_id,word2_id,word3_id,isstart) values %s
+                ''' % (','.join(sql)))
+                sql = []
+
+        if sql:
+            cur.execute('''
+            insert into chain(word1_id,word2_id,word3_id,isstart) values %s
+            ''' % (','.join(sql)))
+        
+        print 'register userchain'
+        sql = []
+        cur.execute('select id,word1_id,word2_id,word3_id from chain')
+        rows = cur.fetchall()
+        chains = {}
+        for row in rows:
+            chains[(int(row[1]),int(row[2]),int(row[3]))] = int(row[0])
+        for chain in self.newuserchains:
+            id0 = allwords[chain[0]]
+            id1 = allwords[chain[1]]
+            id2 = allwords[chain[2]]
+            userid = chain[3]
+            chainid = chains[(id0,id1,id2)]
+            sql.append("(%d,%d)" % (userid,chainid))
+
+            if (len(sql) % 1000) == 0:
+                cur.execute('''
+                insert into userchain(user_id,chain_id) values %s
+                ''' % (','.join(sql)))
+                sql = []
+
+        if sql:
+            cur.execute('''
+            insert into userchain(user_id,chain_id) values %s
+            ''' % (','.join(sql)))
+
     def regist_sentence(self,sentence,user=''):
         cur = self.db
         mecab = self.mecab
@@ -142,21 +206,6 @@ class MarkovChains(object):
             self.chains = self.get_allchain()
         chains = self.chains
         u = unicode
-
-        n = mecab.parseToNode(sentence)
-
-        ## 不要な文字を削る
-        words = []
-        isstart = True
-        while n:
-            if n.surface == '':
-                n = n.next
-                continue
-            words.append({'name':u(n.surface),
-                          'feature':u(n.feature),
-                          'isstart':isstart})
-            isstart = False
-            n = n.next
 
         ## ユーザー登録
         userid = False
@@ -175,81 +224,51 @@ class MarkovChains(object):
                 lastid = int(row[0])
             else:
                 lastid = 0
-        
-        ## 単語登録
-        sql = ['("%s")' % (MySQLdb.escape_string(x['name'])) for x in words\
-                if x['name'] not in allwords]
-        rwords = [x['name'] for x in words if x['name'] not in allwords]
-        
-        if sql:
-            cur.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
-            for word in rwords:
-                cur.execute('select id from word where name = "%s"' %\
-                        (MySQLdb.escape_string(word)))
-                result = cur.fetchone()
-                allwords[word] = result[0]
 
-        ## マルコフ連鎖登録
+        n = mecab.parseToNode(sentence)
+
+        ## 不要な文字を削る
+        words = []
+        isstart = True
+        while n:
+            if n.surface == '':
+                n = n.next
+                continue
+            words.append({'name':u(n.surface),
+                          'isstart':isstart})
+            self.newwords[(u(n.surface),isstart)] = 0
+            isstart = False
+            n = n.next
+
+        
+        # マルコフ連鎖登録
         w1 = ''
         w2 = ''
+        w3 = ''
         chain = {}
         for word in words:
-            current = word
-            if w1 and w2:
-                if (w1['name'],w2['name']) not in chain:
-                    chain[(w1['name'],w2['name'],w1['isstart'])] = {}
-                chain[(w1['name'],w2['name'],w1['isstart'])][current['name']]=\
-                        chain[(w1['name'],w2['name'],w1['isstart'])]\
-                        .get(current['name'], 0) + 1
-            w1,w2 = w2,word
+            if w1 and w2 and w2:
+                word1 = w1['name']
+                word2 = w2['name']
+                word3 = w3['name']
+                isstart = w1['isstart']
+                chain[(word1,word2,word3,isstart)]= 0
+            w1,w2,w3 = w2,w3,word
         
-        sql = []
-        rchains = []
+        rchains = {}
         for wlist in chain:
-            for word in chain[wlist]:
-                id0 = allwords[wlist[0]]
-                id1 = allwords[wlist[1]]
-                isstart = wlist[2]
-                id2 = allwords[word]
-                if (id0,id1,id2) not in chains:
-                    sql.append("(%d,%d,%d,%d)" % (id0,id1,id2,isstart))
-                    self.chains[(id0,id1,id2)] = 0
-                    rchains.append((id0,id1,id2))
+            if wlist not in self.chains:
+                w1,w2,w3,isstart = wlist
+                self.newchains[(w1,w2,w3,isstart)] = 0
+                rchains[(w1,w2,w3,isstart)] = 0
         
-        if sql:
-            cur.execute('''
-            insert into chain(word1_id,word2_id,word3_id,isstart) values %s
-            ''' % (','.join(sql)))
+        # ユーザごとのデータを記録
         if user:
             sql = []
             select_sql = []
             for row in rchains:
-                if ((row[0]),(row[1]),(row[2])) not in userchains:
-                    select_sql.append("""
-                    (word1_id = %d and word2_id = %d and word3_id = %d)
-                    """ % (row[0],row[1],row[2]))
-            
-            if select_sql:
-                cur.execute("""
-                select id from chain where %s
-                """ % ('or'.join(select_sql)))
-                rows = cur.fetchall()
-                for ro in rows:
-                    sql.append("(%d,%d)" % (userid,int(ro[0])))
-                    userchains[((row[0]),(row[1]),(row[2]))] = 0
-            #cur.execute('''
-            #select id from chain
-            #where word1_id = %d and
-            #word2_id = %d and
-            #word3_id = %d
-            #''' % (row[0],row[1],row[2]))
-            #ro = cur.fetchone()
-            #sql.append("(%d,%d)" % (userid,int(ro[0])))
-            #userchains[((row[0]),(row[1]),(row[2]))] = 0
-            if sql:
-                cur.execute('''
-                insert into userchain(user_id,chain_id) values %s
-                ''' % (','.join(sql)))
+                if row not in userchains:
+                    self.newuserchains[(row[0],row[1],row[2],userid)] = 0
 
     def make_sentence(self,user=''):
         limit = 20

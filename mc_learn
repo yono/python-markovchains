@@ -25,19 +25,11 @@ if __name__ == '__main__':
         quit()
     m = markovchains.MarkovChains()
     print fileordir
+    sentences = []
     for file in files:
-        f = open(file).read().splitlines()
         print file
-        count = 0
+        f = open(file).read().splitlines()
         for line in f:
             last = m.regist_sentence(line,user)
-            if (count % 1000) == 0:
-                print ''
-                sys.stdout.write('(%d/%d): ' % (count,len(f)))
-                sys.stdout.flush() 
-            if (count % 20) == 0:
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            count += 1
-        print ''
+    m.regist_newdata()
 
