@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+import os
+import sys
+from optparse import OptionParser, OptionValueError
+import markovchains
+
+if __name__ == '__main__':
+    usage = "usage: %prog filename/dirname [options]"
+    parser = OptionParser(usage)
+    parser.add_option('-u','--user',action='store',help=u'発言したユーザ')
+    (options, args) = parser.parse_args()
+    user = ''
+    if options.user != None:
+        user = options.user
+    fileordir = os.path.join(os.environ['PWD'],sys.argv[1])
+    files = []
+    if os.path.isdir(fileordir):
+        files = os.listdir(fileordir)
+        for i in xrange(len(files)):
+            files[i] = os.path.join(fileordir,files[i])
+    elif os.path.isfile(fileordir):
+        files.append(fileordir)
+    else:
+        quit()
+    m = markovchains.MarkovChains()
+    print fileordir
+    for file in files:
+        f = open(file).read().splitlines()
+        print file
+        count = 0
+        for line in f:
+            last = m.regist_sentence(line,user)
+            if (count % 1000) == 0:
+                print ''
+                sys.stdout.write('(%d/%d): ' % (count,len(f)))
+                sys.stdout.flush() 
+            if (count % 20) == 0:
+                sys.stdout.write('.')
+                sys.stdout.flush()
+            count += 1
+        print ''
+
