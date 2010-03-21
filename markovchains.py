@@ -109,6 +109,16 @@ class MarkovChains(object):
         rows = db.fetchall()
         words = dict(zip(rows,range(len(rows))))
         return words
+
+    def get_userchain(self,userid):
+        db = self.db
+        db.execute('''
+        select c.word1_id,c.word2_id,c.word3_id from chain c,userchain uc
+        where uc.user_id = %d and uc.chain_id = c.id
+        ''' % (userid))
+        rows = db.fetchall()
+        words = dict(zip(rows,range(len(rows))))
+        return words
  
     def get_kutouten(self):
         db = self.db
@@ -151,14 +161,24 @@ class MarkovChains(object):
         ## ユーザー登録
         userid = False
         if user:
-            cur.execute('select id from user where name = "%s"',(user))
-            if r.fetchone() is None:
-                cur.execute('insert into user (name) values ("%s")',(user))
-                r = cur.execute('select id from user where name = "%s"',(user))
-            userid = int(r[0]) 
+            cur.execute('select id from user where name = "%s"' % (user))
+            row = cur.fetchone()
+            if row is None:
+                cur.execute("insert into user (name) values ('%s')" % (user)) 
+                cur.execute('select id from user where name = "%s"' % (user))
+                row = cur.fetchone()
+            userid = int(row[0]) 
+            userchains = self.get_userchain(userid)
+            cur.execute('select id from chain order by id desc limit 1')
+            row = cur.fetchone()
+            if row:
+                lastid = int(row[0])
+            else:
+                lastid = 0
         
         ## 単語登録
-        sql = ['("%s")' % (MySQLdb.escape_string(x['name'])) for x in words if x['name'] not in allwords]
+        sql = ['("%s")' % (MySQLdb.escape_string(x['name'])) for x in words\
+                if x['name'] not in allwords]
         rwords = [x['name'] for x in words if x['name'] not in allwords]
         
         if sql:
@@ -174,8 +194,6 @@ class MarkovChains(object):
         w2 = ''
         chain = {}
         for word in words:
-            #name = word['name']
-            #isstart = word['isstart']
             current = word
             if w1 and w2:
                 if (w1['name'],w2['name']) not in chain:
@@ -186,6 +204,7 @@ class MarkovChains(object):
             w1,w2 = w2,word
         
         sql = []
+        rchains = []
         for wlist in chain:
             for word in chain[wlist]:
                 id0 = allwords[wlist[0]]
@@ -195,11 +214,42 @@ class MarkovChains(object):
                 if (id0,id1,id2) not in chains:
                     sql.append("(%d,%d,%d,%d)" % (id0,id1,id2,isstart))
                     self.chains[(id0,id1,id2)] = 0
+                    rchains.append((id0,id1,id2))
         
         if sql:
             cur.execute('''
             insert into chain(word1_id,word2_id,word3_id,isstart) values %s
             ''' % (','.join(sql)))
+        if user:
+            sql = []
+            select_sql = []
+            for row in rchains:
+                if ((row[0]),(row[1]),(row[2])) not in userchains:
+                    select_sql.append("""
+                    (word1_id = %d and word2_id = %d and word3_id = %d)
+                    """ % (row[0],row[1],row[2]))
+            
+            if select_sql:
+                cur.execute("""
+                select id from chain where %s
+                """ % ('or'.join(select_sql)))
+                rows = cur.fetchall()
+                for ro in rows:
+                    sql.append("(%d,%d)" % (userid,int(ro[0])))
+                    userchains[((row[0]),(row[1]),(row[2]))] = 0
+            #cur.execute('''
+            #select id from chain
+            #where word1_id = %d and
+            #word2_id = %d and
+            #word3_id = %d
+            #''' % (row[0],row[1],row[2]))
+            #ro = cur.fetchone()
+            #sql.append("(%d,%d)" % (userid,int(ro[0])))
+            #userchains[((row[0]),(row[1]),(row[2]))] = 0
+            if sql:
+                cur.execute('''
+                insert into userchain(user_id,chain_id) values %s
+                ''' % (','.join(sql)))
 
     def make_sentence(self,user=''):
         limit = 20
@@ -213,16 +263,16 @@ class MarkovChains(object):
             ''')
             row = cur.fetchone()
         else:
-            row = cur.execute("select id from user where name = ?",(user))
-            row = row.fetchone()
+            cur.execute("select id from user where name = '%s'" % (user))
+            row = cur.fetchone()
             userid = int(row[0])
-            row = cur.execute('''
+            cur.execute('''
             select c.word1_id,c.word2_id,c.word3_id 
-            from chain c,user_chain uc,word w
-            where c.id = uc.chain_id and uc.user_id = %d and w.isstart = TRUE
-            and c.word1_id = w.id
+            from chain c,userchain uc
+            where c.id = uc.chain_id and uc.user_id = %d and c.isstart = True
             order by rand() limit 1
             ''' % (userid))
+            row = cur.fetchone()
         wordid = map(int, row)
 
         sentenceid = copy.copy(wordid)
@@ -241,13 +291,14 @@ class MarkovChains(object):
                 ''' % (wordid[1],wordid[2]))
                 row = cur.fetchone()
             else:
-                row = cur.execute('''
-                select c.word3_id,w.isend from chain c,user_chain uc,word w
-                where c.word1_id = ? and c.word2_id = ?
+                cur.execute('''
+                select c.word3_id from chain c,userchain uc
+                where c.word1_id = %d and c.word2_id = %d
                 and uc.chain_id = c.id 
-                and uc.user_id = ? and c.word3_id = w.id
+                and uc.user_id = %d
                 order by rand() limit 1
-                ''',(wordid[1],wordid[2],userid))
+                ''' % (wordid[1],wordid[2],userid))
+                row = cur.fetchone()
             if row is None:
                 break
             nextid = int(row[0])
