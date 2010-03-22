@@ -291,6 +291,7 @@ class MarkovChains(object):
         cur = self.db
 
         ## 文頭の言葉を取得
+        print 'first word'
         if user == '':
             cur.execute('''
             select word1_id,word2_id,word3_id from chain where isstart=True
@@ -313,6 +314,7 @@ class MarkovChains(object):
         sentenceid = copy.copy(wordid)
 
         ## テーブルを参照して文章(単語idの配列)生成
+        print 'all word'
         count = 0
         kutouten = self.get_kutouten()
         while True:
@@ -332,7 +334,7 @@ class MarkovChains(object):
                 order by count desc
                 ''' % (wordid[1],wordid[2],userid))
                 rows = cur.fetchall()
-            if row is None:
+            if len(rows) == 0:
                 break
             ## 選択
             allnum = sum([int(x[1]) for x in rows])
@@ -343,7 +345,7 @@ class MarkovChains(object):
             sum_prob = 0
             for d in data:
                 sum_prob += d[1]
-                if randnum < sum_prob:
+                if randnum <= sum_prob:
                     nextid = d[0]
             sentenceid.append(nextid)
             wordid = [wordid[1],wordid[2],nextid]
