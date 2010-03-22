@@ -3,9 +3,10 @@
 import os
 from optparse import OptionParser, OptionValueError
 import copy
+from ConfigParser import SafeConfigParser
+import random
 import MySQLdb
 import MeCab
-from ConfigParser import SafeConfigParser
 
 class MarkovChains(object):
 
@@ -77,6 +78,7 @@ class MarkovChains(object):
         word2_id int(11) NOT NULL default '0',
         word3_id int(11) NOT NULL default '0',
         isstart BOOL NOT NULL default '0',
+        count int(11) NOT NULL default '0',
         PRIMARY KEY (id),
         FOREIGN KEY (word1_id) REFERENCES word(id),
         FOREIGN KEY (word2_id) REFERENCES word(id),
@@ -90,8 +92,9 @@ class MarkovChains(object):
         db.execute(u'''
         CREATE TABLE userchain (
         id int(11) NOT NULL auto_increment,
-        user_id int NOT NULL default '0',
-        chain_id int NOT NULL default '0',
+        user_id int(11) NOT NULL default '0',
+        chain_id int(11) NOT NULL default '0',
+        count int(11) NOT NULL default '0',
         PRIMARY KEY (id),
         FOREIGN KEY (user_id) REFERENCES word(id),
         FOREIGN KEY (chain_id) REFERENCES word(id)
@@ -108,24 +111,30 @@ class MarkovChains(object):
     def get_allchain(self):
         db = self.db
         db.execute('''
-        select w1.name,w2.name,w3.name,c.isstart 
+        select w1.name,w2.name,w3.name,c.isstart,c.count
         from word w1,word w2,word w3,chain c
         where w1.id = c.word1_id and w2.id = c.word2_id and w3.id = c.word3_id
         ''')
         rows = db.fetchall()
-        words = dict(zip(rows,range(len(rows))))
+        words = {}
+        for row in rows:
+            count = int(row[4])
+            words[(row[0],row[1],row[2],row[3])] = count
         return words
 
     def get_userchain(self,userid):
         db = self.db
         db.execute('''
-        select w1.name,w2.name,w3.name,c.isstart 
+        select w1.name,w2.name,w3.name,c.isstart,c.count
         from word w1,word w2,word w3,chain c,userchain uc
         where uc.user_id = %d and uc.chain_id = c.id
         and w1.id = c.word1_id and w2.id = c.word2_id and w3.id = c.word3_id
         ''' % (userid))
         rows = db.fetchall()
-        words = dict(zip(rows,range(len(rows))))
+        words = {}
+        for row in rows:
+            count = int(row[4])
+            words[(row[0],row[1],row[2],row[3])] = count
         return words
  
     def get_kutouten(self):
@@ -157,17 +166,20 @@ class MarkovChains(object):
             id1 = allwords[chain[1]]
             id2 = allwords[chain[2]]
             isstart = chain[3]
-            sql.append("(%d,%d,%d,%d)" % (id0,id1,id2,isstart))
+            count = self.newchains[chain]
+            sql.append("(%d,%d,%d,%d,%d)" % (id0,id1,id2,isstart,count))
 
             if (len(sql) % 1000) == 0:
                 cur.execute('''
-                insert into chain(word1_id,word2_id,word3_id,isstart) values %s
+                insert into chain(word1_id,word2_id,word3_id,isstart,count) 
+                values %s
                 ''' % (','.join(sql)))
                 sql = []
 
         if sql:
             cur.execute('''
-            insert into chain(word1_id,word2_id,word3_id,isstart) values %s
+            insert into chain(word1_id,word2_id,word3_id,isstart,count) 
+            values %s
             ''' % (','.join(sql)))
         
         print 'register userchain'
@@ -182,18 +194,19 @@ class MarkovChains(object):
             id1 = allwords[chain[1]]
             id2 = allwords[chain[2]]
             userid = chain[3]
+            count = self.newuserchains[chain]
             chainid = chains[(id0,id1,id2)]
-            sql.append("(%d,%d)" % (userid,chainid))
+            sql.append("(%d,%d,%d)" % (userid,chainid,count))
 
             if (len(sql) % 1000) == 0:
                 cur.execute('''
-                insert into userchain(user_id,chain_id) values %s
+                insert into userchain(user_id,chain_id,count) values %s
                 ''' % (','.join(sql)))
                 sql = []
 
         if sql:
             cur.execute('''
-            insert into userchain(user_id,chain_id) values %s
+            insert into userchain(user_id,chain_id,count) values %s
             ''' % (','.join(sql)))
 
     def regist_sentence(self,sentence,user=''):
@@ -240,7 +253,6 @@ class MarkovChains(object):
             isstart = False
             n = n.next
 
-        
         # マルコフ連鎖登録
         w1 = ''
         w2 = ''
@@ -252,15 +264,17 @@ class MarkovChains(object):
                 word2 = w2['name']
                 word3 = w3['name']
                 isstart = w1['isstart']
-                chain[(word1,word2,word3,isstart)]= 0
+                chain[(word1,word2,word3,isstart)] = \
+                    chain.get((word1,word2,word3,isstart),0) + 1
             w1,w2,w3 = w2,w3,word
         
         rchains = {}
         for wlist in chain:
             if wlist not in self.chains:
                 w1,w2,w3,isstart = wlist
-                self.newchains[(w1,w2,w3,isstart)] = 0
-                rchains[(w1,w2,w3,isstart)] = 0
+                self.newchains[(w1,w2,w3,isstart)] = \
+                    self.newchains.get((w1,w2,w3,isstart),0) + chain[wlist]
+                rchains[(w1,w2,w3,isstart)] = chain[wlist]
         
         # ユーザごとのデータを記録
         if user:
@@ -268,7 +282,9 @@ class MarkovChains(object):
             select_sql = []
             for row in rchains:
                 if row not in userchains:
-                    self.newuserchains[(row[0],row[1],row[2],userid)] = 0
+                    self.newuserchains[(row[0],row[1],row[2],userid)] = \
+                    self.newuserchains.get((row[0],row[1],row[2],userid),0) + \
+                    rchains[row]
 
     def make_sentence(self,user=''):
         limit = 20
@@ -298,29 +314,37 @@ class MarkovChains(object):
 
         ## テーブルを参照して文章(単語idの配列)生成
         count = 0
-        ## 句読点
-        #kutouten = {99:0,3:0,33:0,53:0,64:0}
         kutouten = self.get_kutouten()
         while True:
             if user == '':
                 cur.execute('''
-                select word3_id from chain
+                select word3_id,count from chain
                 where word1_id = %d and word2_id = %d
-                order by rand() limit 1
+                order by count desc
                 ''' % (wordid[1],wordid[2]))
-                row = cur.fetchone()
+                rows = cur.fetchall()
             else:
                 cur.execute('''
-                select c.word3_id from chain c,userchain uc
+                select c.word3_id,c.count from chain c,userchain uc
                 where c.word1_id = %d and c.word2_id = %d
                 and uc.chain_id = c.id 
                 and uc.user_id = %d
-                order by rand() limit 1
+                order by count desc
                 ''' % (wordid[1],wordid[2],userid))
-                row = cur.fetchone()
+                rows = cur.fetchall()
             if row is None:
                 break
-            nextid = int(row[0])
+            ## 選択
+            allnum = sum([int(x[1]) for x in rows])
+            data = []
+            for row in rows:
+                data.append((int(row[0]),int(row[1])/float(allnum)))
+            randnum = random.random() 
+            sum_prob = 0
+            for d in data:
+                sum_prob += d[1]
+                if randnum < sum_prob:
+                    nextid = d[0]
             sentenceid.append(nextid)
             wordid = [wordid[1],wordid[2],nextid]
             if count > limit and nextid in kutouten:
