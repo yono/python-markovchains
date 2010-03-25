@@ -24,12 +24,11 @@ if __name__ == '__main__':
     else:
         quit()
     m = markovchains.MarkovChains()
-    print fileordir
     sentences = []
     for file in files:
         print file
         f = open(file).read().splitlines()
         for line in f:
-            last = m.regist_sentence(line,user)
-    m.regist_newdata()
+            last = m.analyze_sentence(line,user)
+    m.register_data()
 

@@ -137,19 +137,19 @@ class MarkovChains(object):
             words[(row[0],row[1],row[2],row[3])] = count
         return words
  
-    def get_kutouten(self):
+    def get_punctuation(self):
         db = self.db
-        kutouten_word = {'。':0, '．':0,'？':0,'！':0}
-        kutouten = {}
-        for word in kutouten_word:
+        punctuations_word = {'。':0, '．':0,'？':0,'！':0}
+        punctuations = {}
+        for word in punctuations_word:
             db.execute("select id from word where name = '%s'" % (word))
             rows = db.fetchall()
             if rows:
                 for row in rows:
-                    kutouten[int(row[0])] = 0
-        return kutouten
+                    punctuations[int(row[0])] = 0
+        return punctuations
 
-    def regist_newdata(self):
+    def register_data(self):
         cur = self.db
         print 'register words'
         sql = ['("%s")' % (MySQLdb.escape_string(x[0])) for x in \
@@ -209,7 +209,7 @@ class MarkovChains(object):
             insert into userchain(user_id,chain_id,count) values %s
             ''' % (','.join(sql)))
 
-    def regist_sentence(self,sentence,user=''):
+    def analyze_sentence(self,sentence,user=''):
         cur = self.db
         mecab = self.mecab
         if len(self.words) == 0:
@@ -291,7 +291,6 @@ class MarkovChains(object):
         cur = self.db
 
         ## 文頭の言葉を取得
-        print 'first word'
         if user == '':
             cur.execute('''
             select word1_id,word2_id,word3_id from chain where isstart=True
@@ -314,9 +313,8 @@ class MarkovChains(object):
         sentenceid = copy.copy(wordid)
 
         ## テーブルを参照して文章(単語idの配列)生成
-        print 'all word'
         count = 0
-        kutouten = self.get_kutouten()
+        punctuations = self.get_punctuation()
         while True:
             if user == '':
                 cur.execute('''
@@ -349,7 +347,7 @@ class MarkovChains(object):
                     nextid = d[0]
             sentenceid.append(nextid)
             wordid = [wordid[1],wordid[2],nextid]
-            if count > limit and nextid in kutouten:
+            if count > limit and nextid in punctuations:
                 break
             count += 1
         
