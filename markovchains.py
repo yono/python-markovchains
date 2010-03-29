@@ -5,7 +5,9 @@ from optparse import OptionParser, OptionValueError
 import copy
 from ConfigParser import SafeConfigParser
 import random
-import MySQLdb
+import pyPgSQL.PgSQL
+from pyPgSQL.PgSQL import PgArray
+from pyPgSQL.PgSQL import PgQuoteString
 import MeCab
 
 class MarkovChains(object):
@@ -14,27 +16,29 @@ class MarkovChains(object):
         dbname = 'markov'
         parser = SafeConfigParser()
         parser.readfp(open('settings.ini'))
-        user = parser.get('mysql','user')
-        password = parser.get('mysql','password')
-        self.con = MySQLdb.connect(user=user,passwd=password,
-                charset='utf8',use_unicode=True)
+        user = parser.get('postgresql','user')
+        password = parser.get('postgresql','password')
+        is_exist = True
+        try:
+            self.con = pyPgSQL.PgSQL.connect(user='postgres',database=dbname)
+        except:
+            is_exist = False
+            self.con = pyPgSQL.PgSQL.connect(user='postgres')
+
         self.db = self.con.cursor()
-        self.db.execute('show databases')
-        rows = self.db.fetchall()
-        is_exist = False
-        for row in rows:
-            if row[0] == dbname:
-                is_exist = True
 
-        if is_exist:
-            self.db.execute('use %s' % (dbname))
-        else:
-            print 'create db'
-            self.db.execute('create database %s default character set utf8' %\
-                    (dbname))
-            self.db.execute('use %s' % (dbname))
+        if not is_exist:
+            self.db.execute("commit")
+            self.db.execute("create database %s encoding 'utf8'" % (dbname))
+            self.db.close()
+            self.con.close()
+            self.con = pyPgSQL.PgSQL.connect(user='postgres',database=dbname)
+            self.db = self.con.cursor()
+            self.db.execute("BEGIN")
             self.init_tables()
-
+            self.db.execute("COMMIT")
+            self.db.execute("BEGIN")
+        
         self.mecab = MeCab.Tagger()
         self.words = {}
         self.chains = {}
@@ -43,6 +47,11 @@ class MarkovChains(object):
         self.newchains = {}
         self.newuserchains = {}
 
+    def __del__(self):
+        self.db.execute("COMMIT")
+        self.db.close()
+        self.con.close()
+
     def init_tables(self):
         self.init_user()
         self.init_word()    
@@ -50,62 +59,51 @@ class MarkovChains(object):
         self.init_userchain()
 
     def init_user(self):
-        db = self.db
-        db.execute('''
-        CREATE TABLE user (
-        id int(11) NOT NULL auto_increment,
-        name varchar(100) NOT NULL default '',
-        PRIMARY KEY (id)
-        ) DEFAULT CHARACTER SET=utf8
+        self.db.execute('''
+        create table users (
+        id serial primary key,
+        name varchar(100) NOT NULL default ''
+        )
         ''')
 
     def init_word(self):
-        db = self.db
-        db.execute('''
+        self.db.execute('''
         CREATE TABLE word (
-        id int(11) NOT NULL auto_increment,
-        name varchar(100) NOT NULL default '',
-        PRIMARY KEY (id)
-        ) DEFAULT CHARACTER SET=utf8
+        id serial primary key,
+        name varchar(100) NOT NULL default ''
+        )
         ''')
 
     def init_chain(self):
-        db = self.db
-        db.execute(u'''
+        self.db.execute(u'''
         CREATE TABLE chain (
-        id int(11) NOT NULL auto_increment,
-        word1_id int(11) NOT NULL default '0',
-        word2_id int(11) NOT NULL default '0',
-        word3_id int(11) NOT NULL default '0',
-        isstart BOOL NOT NULL default '0',
-        count int(11) NOT NULL default '0',
-        PRIMARY KEY (id),
-        FOREIGN KEY (word1_id) REFERENCES word(id),
-        FOREIGN KEY (word2_id) REFERENCES word(id),
-        FOREIGN KEY (word3_id) REFERENCES word(id),
-        INDEX word_12 (word1_id,word2_id)
-        ) DEFAULT CHARACTER SET=utf8
+        id serial primary key,
+        word1_id integer REFERENCES word (id),
+        word2_id integer REFERENCES word (id),
+        word3_id integer REFERENCES word (id),
+        isstart BOOL NOT NULL default false,
+        count integer NOT NULL default '0'
+        )
         ''')
 
     def init_userchain(self):
-        db = self.db
-        db.execute(u'''
+        self.db.execute(u'''
         CREATE TABLE userchain (
-        id int(11) NOT NULL auto_increment,
-        user_id int(11) NOT NULL default '0',
-        chain_id int(11) NOT NULL default '0',
-        count int(11) NOT NULL default '0',
-        PRIMARY KEY (id),
-        FOREIGN KEY (user_id) REFERENCES word(id),
-        FOREIGN KEY (chain_id) REFERENCES word(id)
-        ) DEFAULT CHARACTER SET=utf8;
+        id serial primary key,
+        user_id integer REFERENCES users (id),
+        chain_id integer REFERENCES chain (id),
+        count integer NOT NULL default '0'
+        )
         ''')
-    
+
     def get_allwords(self):
         db = self.db
         db.execute('select name,id from word')
         rows = db.fetchall()
-        words = dict(rows)
+        words = {}
+        for row in rows:
+            name = unicode(row[0])
+            words[name] = int(row[1])
         return words
  
     def get_allchain(self):
@@ -149,12 +147,17 @@ class MarkovChains(object):
                     punctuations[int(row[0])] = 0
         return punctuations
 
+    def escape(self,word):
+        return word.replace("'",r"\'").replace('"',r'\"')
+
     def register_data(self):
         cur = self.db
         print 'register words'
-        sql = ['("%s")' % (MySQLdb.escape_string(x[0])) for x in \
+        sql = ["('%s')" % (self.escape(x[0])) for x in \
                 self.newwords if x[0] not in self.words]
      
+        for a in sql:
+            print a
         if sql:
             cur.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
         allwords = self.get_allwords()
@@ -167,7 +170,7 @@ class MarkovChains(object):
             id2 = allwords[chain[2]]
             isstart = chain[3]
             count = self.newchains[chain]
-            sql.append("(%d,%d,%d,%d,%d)" % (id0,id1,id2,isstart,count))
+            sql.append("(%d,%d,%d,%s,%d)" % (id0,id1,id2,isstart,count))
 
             if (len(sql) % 1000) == 0:
                 cur.execute('''
@@ -223,11 +226,11 @@ class MarkovChains(object):
         ## ユーザー登録
         userid = False
         if user:
-            cur.execute('select id from user where name = "%s"' % (user))
+            cur.execute("select id from users where name = '%s'" % (user))
             row = cur.fetchone()
             if row is None:
-                cur.execute("insert into user (name) values ('%s')" % (user)) 
-                cur.execute('select id from user where name = "%s"' % (user))
+                cur.execute("insert into users (name) values ('%s')" % (user)) 
+                cur.execute("select id from users where name = '%s'" % (user))
                 row = cur.fetchone()
             userid = int(row[0]) 
             userchains = self.get_userchain(userid)
@@ -294,18 +297,18 @@ class MarkovChains(object):
         if user == '':
             cur.execute('''
             select word1_id,word2_id,word3_id from chain where isstart=True
-            order by rand() limit 1
+            order by RANDOM() limit 1
             ''')
             row = cur.fetchone()
         else:
-            cur.execute("select id from user where name = '%s'" % (user))
+            cur.execute("select id from users where name = '%s'" % (user))
             row = cur.fetchone()
             userid = int(row[0])
             cur.execute('''
             select c.word1_id,c.word2_id,c.word3_id 
             from chain c,userchain uc
             where c.id = uc.chain_id and uc.user_id = %d and c.isstart = True
-            order by rand() limit 1
+            order by RANDOM() limit 1
             ''' % (userid))
             row = cur.fetchone()
         wordid = map(int, row)
@@ -361,5 +364,6 @@ class MarkovChains(object):
 
         return sentence
 
-if __name__=='__main__':
+if __name__ == '__main__':
     obj = MarkovChains()
+    obj.get_allwords()
