@@ -149,6 +149,9 @@ class MarkovChains(object):
                     punctuations[int(row[0])] = 0
         return punctuations
 
+    """
+    連想配列に保存された解析結果をDBに保存
+    """
     def register_data(self):
         cur = self.db
         print 'register words'
@@ -209,6 +212,9 @@ class MarkovChains(object):
             insert into userchain(user_id,chain_id,count) values %s
             ''' % (','.join(sql)))
 
+    """
+    文章を解析し、連想配列に保存
+    """
     def analyze_sentence(self,sentence,user=''):
         cur = self.db
         mecab = self.mecab
@@ -259,14 +265,17 @@ class MarkovChains(object):
         w3 = ''
         chain = {}
         for word in words:
-            if w1 and w2 and w2:
+            print word['name']
+            #if w1 and w2 and w2:
+            if w1 and w2:
                 word1 = w1['name']
                 word2 = w2['name']
-                word3 = w3['name']
+                word3 = word['name']
                 isstart = w1['isstart']
+                print word1, word2, word3
                 chain[(word1,word2,word3,isstart)] = \
                     chain.get((word1,word2,word3,isstart),0) + 1
-            w1,w2,w3 = w2,w3,word
+            w1,w2 = w2,word
         
         rchains = {}
         for wlist in chain:
