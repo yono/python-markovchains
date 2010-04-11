@@ -125,7 +125,7 @@ class MarkovChains(object):
     def get_userchain(self,userid):
         db = self.db
         db.execute('''
-        select w1.name,w2.name,w3.name,c.isstart,c.count
+        select w1.name, w2.name, w3.name, c.count, uc.id, uc.user_id
         from word w1,word w2,word w3,chain c,userchain uc
         where uc.user_id = %d and uc.chain_id = c.id
         and w1.id = c.word1_id and w2.id = c.word2_id and w3.id = c.word3_id
@@ -133,8 +133,9 @@ class MarkovChains(object):
         rows = db.fetchall()
         words = {}
         for row in rows:
-            count = int(row[4])
-            words[(row[0],row[1],row[2],row[3])] = count
+            count = int(row[3])
+            id = int(row[4])
+            words[(row[0],row[1],row[2],row[5])] = (count,id)
         return words
  
     def get_punctuation(self):
@@ -170,9 +171,16 @@ class MarkovChains(object):
             id2 = allwords[chain[2]]
             isstart = chain[3]
             count = self.newchains[chain]
-            sql.append("(%d,%d,%d,%d,%d)" % (id0,id1,id2,isstart,count))
+            if chain in self.chains:
+                cur.execute('''
+                    update chain set count=%d
+                    where word1_id = %d and word2_id = %d and word3_id = %d
+                    and isstart = %d
+                    ''' % (self.newchains[chain],id0,id1,id2,isstart))
+            else:
+                sql.append("(%d,%d,%d,%d,%d)" % (id0,id1,id2,isstart,count))
 
-            if (len(sql) % 1000) == 0:
+            if (len(sql) % 1000) == 0 and len(sql) > 0:
                 cur.execute('''
                 insert into chain(word1_id,word2_id,word3_id,isstart,count) 
                 values %s
@@ -199,9 +207,18 @@ class MarkovChains(object):
             userid = chain[3]
             count = self.newuserchains[chain]
             chainid = chains[(id0,id1,id2)]
-            sql.append("(%d,%d,%d)" % (userid,chainid,count))
 
-            if (len(sql) % 1000) == 0:
+            if chain in self.userchains:
+                cur.execute('''
+                    update userchain set count=%d
+                    where id = %d
+                    ''' % (self.newuserchains[chain],
+                        self.userchains[chain][1]))
+        
+            else: 
+                sql.append("(%d,%d,%d)" % (userid,chainid,count))
+
+            if (len(sql) % 1000) == 0 and len(sql) > 0:
                 cur.execute('''
                 insert into userchain(user_id,chain_id,count) values %s
                 ''' % (','.join(sql)))
@@ -236,7 +253,7 @@ class MarkovChains(object):
                 cur.execute('select id from user where name = "%s"' % (user))
                 row = cur.fetchone()
             userid = int(row[0]) 
-            userchains = self.get_userchain(userid)
+            self.userchains = self.get_userchain(userid)
             cur.execute('select id from chain order by id desc limit 1')
             row = cur.fetchone()
             if row:
@@ -265,35 +282,31 @@ class MarkovChains(object):
         w3 = ''
         chain = {}
         for word in words:
-            print word['name']
-            #if w1 and w2 and w2:
             if w1 and w2:
                 word1 = w1['name']
                 word2 = w2['name']
                 word3 = word['name']
                 isstart = w1['isstart']
-                print word1, word2, word3
                 chain[(word1,word2,word3,isstart)] = \
                     chain.get((word1,word2,word3,isstart),0) + 1
             w1,w2 = w2,word
         
         rchains = {}
         for wlist in chain:
-            if wlist not in self.chains:
-                w1,w2,w3,isstart = wlist
-                self.newchains[(w1,w2,w3,isstart)] = \
-                    self.newchains.get((w1,w2,w3,isstart),0) + chain[wlist]
-                rchains[(w1,w2,w3,isstart)] = chain[wlist]
+            self.newchains[wlist] = \
+                self.newchains.get(wlist,0) + chain[wlist] +\
+                self.chains.get(wlist,0)
+            rchains[wlist] = chain[wlist]
         
         # ユーザごとのデータを記録
         if user:
             sql = []
             select_sql = []
             for row in rchains:
-                if row not in userchains:
-                    self.newuserchains[(row[0],row[1],row[2],userid)] = \
-                    self.newuserchains.get((row[0],row[1],row[2],userid),0) + \
-                    rchains[row]
+                key = (row[0],row[1],row[2],userid)
+                self.newuserchains[key] = \
+                    self.newuserchains.get(key,0) + rchains[row] +\
+                    self.userchains.get(key,(0,0))[0]
 
     def make_sentence(self,user=''):
         limit = 20
