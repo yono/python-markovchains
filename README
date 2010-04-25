@@ -5,6 +5,7 @@ MySQLdb
 MeCab
 
 [DBの設定]
+settings.ini.sample を settings.ini に変更
 settings.ini にDB作成に使うユーザ名とパスワードを書いておく
 
 [データ読み込み]
