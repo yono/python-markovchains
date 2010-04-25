@@ -25,10 +25,12 @@ if __name__ == '__main__':
         quit()
     m = markovchains.MarkovChains()
     sentences = []
+    print "Loading file....."
     for file in files:
         print file
         f = open(file).read().splitlines()
         for line in f:
             last = m.analyze_sentence(line,user)
+    print "Registering data....."
     m.register_data()
 

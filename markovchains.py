@@ -7,6 +7,7 @@ from ConfigParser import SafeConfigParser
 import random
 import MySQLdb
 import MeCab
+from extractword import Sentence
 
 class Word(object):
 
@@ -53,9 +54,9 @@ class MarkovChains(object):
             if row[0] == dbname:
                 self.db.execute('use %s' % (dbname))
                 return 
-        self._create_db()
+        self._create_db(dbname)
     
-    def _create_db(self):
+    def _create_db(self,dbname):
         self.db.execute('create database %s default character set utf8' %\
                 (dbname))
         self.db.execute('use %s' % (dbname))
@@ -168,6 +169,8 @@ class MarkovChains(object):
 
             inner join word w3
             on c.word3_id = w3.id
+        where
+            uc.user_id = %d
         ''' % (userid))
         rows = db.fetchall()
         words = {}
@@ -190,16 +193,16 @@ class MarkovChains(object):
         return punctuations
 
     def _insert_words(self,sql):
-        cur.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
+        self.db.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
 
     def _insert_chains(self,sql):
-        cur.execute('''
+        self.db.execute('''
         insert into chain(word1_id,word2_id,word3_id,isstart,count) 
         values %s
         ''' % (','.join(sql)))
 
     def _update_chains(self,count,id0,id1,id2,isstart):
-        cur.execute('''
+        self.db.execute('''
             UPDATE 
                 chain 
             SET 
@@ -212,12 +215,12 @@ class MarkovChains(object):
         ''' % (count,id0,id1,id2,isstart))
 
     def _insert_userchains(self,sql):
-        cur.execute('''
+        self.db.execute('''
         insert into userchain(user_id,chain_id,count) values %s
         ''' % (','.join(sql)))
 
     def _update_userchains(self,count,userchainid):
-        cur.execute('''
+        self.db.execute('''
             update 
                 userchain 
             set 
@@ -227,8 +230,8 @@ class MarkovChains(object):
             ''' % (count,userchainid))
 
     def register_words(self):
-        sql = ['("%s")' % (MySQLdb.escape_string(x[0])) for x in \
-                self.newwords if x[0] not in self.words]
+        sql = ['("%s")' % (MySQLdb.escape_string(x)) for x in \
+                self.newwords if x not in self.words]
         if sql:
             self._insert_words(sql)
 
@@ -301,12 +304,18 @@ class MarkovChains(object):
             self.chains = self.get_allchain()
 
         words = self._get_words(text)
+        self._update_newwords_dic(words)
         chain = self._update_newchains_dic(words)
         
         if user:
             userid = self._get_user(user)
             self.userchains = self.get_userchain(userid)
-            self._update_userchains_dic(chain)
+            self._update_newuserchains_dic(chain,userid)
+
+    def _update_newwords_dic(self,words):
+        for w in words:
+            if w['name'] not in self.words:
+                self.newwords[w['name']] = self.newwords.get(w['name'], 0) + 1
 
     def _update_newchains_dic(self,words):
         w1 = ''
@@ -314,10 +323,10 @@ class MarkovChains(object):
         w3 = ''
         chain = {}
         for word in words:
-            if w1 and w2:
+            if w1 and w2 and w3:
                 key = (w1['name'],w2['name'],w3['name'],w1['isstart'])
                 chain[key] = chain.get(key,0) + 1
-            w1,w2 = w2,word
+            w1,w2,w3 = w2,w3,word
         
         rchains = {}
         for wlist in chain:
@@ -327,7 +336,7 @@ class MarkovChains(object):
             rchains[wlist] = chain[wlist]
         return rchains
 
-    def _update_newuserchains_dic(chains):
+    def _update_newuserchains_dic(self,chains,userid):
         for row in chains:
             key = (row[0],row[1],row[2],userid)
             self.newuserchains[key] = \
@@ -432,13 +441,13 @@ class MarkovChains(object):
  
     def _cond_join_userchain(self,userid):
         if (userid > 0):
-            return 'inner join userchain uc on uc.chain_id = c.id'
+            return ' inner join userchain uc on uc.chain_id = c.id'
         else:
             return ''
 
     def _cond_userid(self,userid):
         if (userid > 0):
-            return 'and uc.userid = %d' % (userid)
+            return ' and uc.user_id = %d' % (userid)
         else:
             return ''
 
