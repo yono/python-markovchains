@@ -6,7 +6,6 @@ import copy
 from ConfigParser import SafeConfigParser
 import random
 import MySQLdb
-import MeCab
 from extractword import Sentence
 
 class Word(object):
@@ -27,7 +26,6 @@ class MarkovChains(object):
 
         self._load_db(dbname)
 
-        self.mecab = MeCab.Tagger()
         self.words = {}
         self.chains = {}
 

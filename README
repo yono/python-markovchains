@@ -2,7 +2,6 @@
 
 [使用しているライブラリ]
 MySQLdb
-MeCab
 extractword -> http://github.com/yono/py-extractword
 
 [DBの設定]
