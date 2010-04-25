@@ -1,4 +1,5 @@
 syntax: glob
+settings.ini
 .DS_Store
 *.pyc
 build/*
