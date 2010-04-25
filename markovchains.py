@@ -19,15 +19,18 @@ class MarkovChains(object):
 
     def __init__(self):
         dbname = 'markov'
-        user, password = self._load_ini()
+        user, password, num = self._load_ini()
         self.con = MySQLdb.connect(user=user,passwd=password,
                 charset='utf8',use_unicode=True)
         self.db = self.con.cursor()
+
+        self.num = num
 
         self._load_db(dbname)
 
         self.words = {}
         self.chains = {}
+        self.userchains = {}
 
         self.newwords = {}
         self.newchains = {}
@@ -43,7 +46,8 @@ class MarkovChains(object):
         parser.readfp(open('settings.ini'))
         user = parser.get('mysql','user')
         password = parser.get('mysql','password')
-        return (user,password)
+        num = int(parser.get('general','num'))
+        return (user,password,num)
     
     def _load_db(self,dbname):
         self.db.execute('show databases')
@@ -85,21 +89,27 @@ class MarkovChains(object):
         ''')
 
     def _init_chain(self):
-        self.db.execute(u'''
+        sql = []
+        sql.append('''
         CREATE TABLE chain (
             id int(11) NOT NULL auto_increment,
-            word1_id int(11) NOT NULL default '0',
-            word2_id int(11) NOT NULL default '0',
-            word3_id int(11) NOT NULL default '0',
+        ''')
+        for i in xrange(self.num):
+            sql.append("word%d_id int(11) NOT NULL default '0'," % (i+1))
+        sql.append('''
             isstart BOOL NOT NULL default '0',
             count int(11) NOT NULL default '0',
             PRIMARY KEY (id),
-            FOREIGN KEY (word1_id) REFERENCES word(id),
-            FOREIGN KEY (word2_id) REFERENCES word(id),
-            FOREIGN KEY (word3_id) REFERENCES word(id),
-            INDEX word_12 (word1_id,word2_id)
-        ) DEFAULT CHARACTER SET=utf8
         ''')
+        for i in xrange(self.num):
+            sql.append("FOREIGN KEY (word%d_id) REFERENCES word(id)," % (i+1))
+        sql.append("INDEX ")
+        ids = []
+        for i in xrange(self.num-1):
+            ids.append("word%d_id" % (i+1))
+        sql.append("(%s)" % (','.join(ids)))
+        sql.append(") DEFAULT CHARACTER SET=utf8")
+        self.db.execute('\n'.join(sql))
 
     def _init_userchain(self):
         self.db.execute(u'''
@@ -121,96 +131,76 @@ class MarkovChains(object):
         return words
  
     def get_allchain(self):
-        self.db.execute('''
-        select 
-            w1.name,
-            w2.name,
-            w3.name,
-            c.isstart,
-            c.count
-        from chain c
-            inner join word w1
-            on c.word1_id = w1.id
-
-            inner join word w2
-            on c.word2_id = w2.id
-
-            inner join word w3
-            on c.word3_id = w3.id
-        ''')
+        sql = []
+        sql.append("select")
+        ids = []
+        for i in xrange(self.num):
+            ids.append("w%d.name" % (i+1))
+        sql.append(','.join(ids))
+        sql.append(',c.isstart, c.count')
+        sql.append('from chain c')
+        for i in xrange(self.num):
+            j = i+1
+            sql.append('inner join word w%d on c.word%d_id = w%d.id' %\
+                    (j,j,j))
+        self.db.execute('\n'.join(sql))
         rows = self.db.fetchall()
         words = {}
         for row in rows:
-            count = int(row[4])
-            words[(row[0],row[1],row[2],row[3])] = count
+            count = int(row[-1])
+            words[tuple(row[0:len(row)-1])] = count
         return words
 
     def get_userchain(self,userid):
-        db = self.db
-        db.execute('''
-        select 
-            w1.name,
-            w2.name,
-            w3.name,
-            c.count,
-            uc.id,
-            uc.user_id
-        from userchain uc
-            inner join chain c
-            on uc.chain_id = c.id
-
-            inner join word w1
-            on c.word1_id = w1.id
-
-            inner join word w2
-            on c.word2_id = w2.id
-
-            inner join word w3
-            on c.word3_id = w3.id
-        where
-            uc.user_id = %d
-        ''' % (userid))
-        rows = db.fetchall()
+        sql = []
+        sql.append("select")
+        ids = []
+        for i in xrange(self.num):
+            ids.append("w%d.name" % (i+1))
+        sql.append(','.join(ids))
+        sql.append(',uc.user_id, c.count, uc.id')
+        sql.append('from chain c')
+        sql.append('inner join userchain uc on uc.chain_id = c.id')
+        for i in xrange(self.num):
+            j = i+1
+            sql.append('inner join word w%d on c.word%d_id = w%d.id' %\
+                    (j,j,j))
+        sql.append("where uc.user_id = %d" % (userid))
+        self.db.execute('\n'.join(sql))
+        rows = self.db.fetchall()
         words = {}
         for row in rows:
-            count = int(row[3])
-            id = int(row[4])
-            words[(row[0],row[1],row[2],row[5])] = (count,id)
+            count = int(row[-2])
+            id = int(row[-1])
+            words[tuple(row[0:len(row)-2])] = (count,id)
         return words
  
     def _get_punctuation(self):
-        db = self.db
-        punctuations_word = {u'。':0, u'．':0,u'？':0,u'！':0}
-        punctuations = {}
-        for word in punctuations_word:
-            db.execute("select id from word where name = '%s'" % (word))
-            rows = db.fetchall()
-            if rows:
-                for row in rows:
-                    punctuations[int(row[0])] = 0
-        return punctuations
+        punctuation_words = {u'。':0, u'．':0,u'？':0,u'！':0}
+        return punctuation_words
 
     def _insert_words(self,sql):
         self.db.execute(u'INSERT INTO word (name) VALUES %s' % (','.join(sql)))
 
-    def _insert_chains(self,sql):
-        self.db.execute('''
-        insert into chain(word1_id,word2_id,word3_id,isstart,count) 
-        values %s
-        ''' % (','.join(sql)))
+    def _insert_chains(self,values):
+        sql = []
+        sql.append("insert into chain(")
+        ids = []
+        for i in xrange(self.num):
+            ids.append("word%d_id" % (i+1))
+        sql.append(",".join(ids))
+        sql.append(",isstart,count)")
+        sql.append("values %s" % (','.join(values)))
+        self.db.execute('\n'.join(sql))
 
-    def _update_chains(self,count,id0,id1,id2,isstart):
-        self.db.execute('''
-            UPDATE 
-                chain 
-            SET 
-                count=%d
-            WHERE 
-                word1_id = %d and 
-                word2_id = %d and 
-                word3_id = %d and 
-                isstart  = %d
-        ''' % (count,id0,id1,id2,isstart))
+    def _update_chains(self,ids,count,isstart):
+        sql = []
+        sql.append('UPDATE chain SET count=%d' % (count))
+        sql.append('WHERE')
+        for i in xrange(self.num):
+            sql.append('word%d_id = %d and ' % (i+1, ids[i]))
+        sql.append('isstart = %d' % (isstart))
+        self.db.execute('\n'.join(sql))
 
     def _insert_userchains(self,sql):
         self.db.execute('''
@@ -238,15 +228,16 @@ class MarkovChains(object):
         allwords = self.get_allwords()
         sql = []
         for chain in self.newchains:
-            id0 = allwords[chain[0]]
-            id1 = allwords[chain[1]]
-            id2 = allwords[chain[2]]
-            isstart = chain[3]
+            ids = [allwords[chain[i]] for i in xrange(self.num)]
+            isstart = chain[self.num]
             count = self.newchains[chain]
             if chain in self.chains:
-                self._update_chains(count,id0,id1,id2,isstart)
+                self._update_chains(ids,count,isstart)
             else:
-                sql.append("(%d,%d,%d,%d,%d)" % (id0,id1,id2,isstart,count))
+                values = []
+                for i in xrange(self.num):
+                    values.append("%d" % (ids[i]))
+                sql.append("(%s,%d,%d)" % (','.join(values),isstart,count))
 
             if (len(sql) % insert_range) == 0 and len(sql) > 0:
                 self._insert_chains(sql)
@@ -258,19 +249,24 @@ class MarkovChains(object):
     def register_userchains(self):
         insert_range = 1000
         allwords = self.get_allwords()
-        sql = []
-        self.db.execute('select id,word1_id,word2_id,word3_id from chain')
+        ids = []
+        for i in xrange(self.num):
+            ids.append("word%d_id" % (i+1))
+        self.db.execute('select id,%s from chain' % (','.join(ids)))
         rows = self.db.fetchall()
         chains = {}
         for row in rows:
-            chains[(int(row[1]),int(row[2]),int(row[3]))] = int(row[0])
+            values = []
+            for i in xrange(self.num):
+                values.append(int(row[i+1]))
+            chains[tuple(values)] = int(row[0])
+
+        sql = []
         for chain in self.newuserchains:
-            id0 = allwords[chain[0]]
-            id1 = allwords[chain[1]]
-            id2 = allwords[chain[2]]
-            userid = chain[3]
+            ids = [allwords[chain[i]] for i in xrange(self.num)]
+            userid = chain[self.num]
             count = self.newuserchains[chain]
-            chainid = chains[(id0,id1,id2)]
+            chainid = chains[tuple(ids)]
 
             if chain in self.userchains:
                 self._update_userchains(count, self.userchains[chain][1])
@@ -307,7 +303,8 @@ class MarkovChains(object):
         
         if user:
             userid = self._get_user(user)
-            self.userchains = self.get_userchain(userid)
+            if len(self.userchains) == 0:
+                self.userchains = self.get_userchain(userid)
             self._update_newuserchains_dic(chain,userid)
 
     def _update_newwords_dic(self,words):
@@ -316,16 +313,17 @@ class MarkovChains(object):
                 self.newwords[w['name']] = self.newwords.get(w['name'], 0) + 1
 
     def _update_newchains_dic(self,words):
-        w1 = ''
-        w2 = ''
-        w3 = ''
+        c_chain = []
         chain = {}
         for word in words:
-            if w1 and w2 and w3:
-                key = (w1['name'],w2['name'],w3['name'],w1['isstart'])
+            if len(c_chain) == self.num:
+                values = [x['name'] for x in c_chain]
+                values.append(c_chain[0]['isstart'])
+                key = tuple(values)
                 chain[key] = chain.get(key,0) + 1
-            w1,w2,w3 = w2,w3,word
-        
+                c_chain.pop(0)
+            c_chain.append(word)
+
         rchains = {}
         for wlist in chain:
             self.newchains[wlist] = \
@@ -336,7 +334,9 @@ class MarkovChains(object):
 
     def _update_newuserchains_dic(self,chains,userid):
         for row in chains:
-            key = (row[0],row[1],row[2],userid)
+            values = list(row[0:len(row)-1])
+            values.append(userid)
+            key = tuple(values)
             self.newuserchains[key] = \
                 self.newuserchains.get(key,0) + chains[row] +\
                 self.userchains.get(key,(0,0))[0]
@@ -359,21 +359,24 @@ class MarkovChains(object):
         words = self._get_startword(userid)
         sentenceid = list(copy.copy(words))
 
-        ## テーブルを参照して文章(単語idの配列)生成
         count = 0
         punctuations = self._get_punctuation()
         while True:
+            end_cond = count > limit and words[-1].name in punctuations
+            if end_cond:
+                break
+
             nextwords = self._get_nextwords(words,userid)
             if len(nextwords) == 0:
                 break
+
             nextword = self._select_nextword(nextwords)
             sentenceid.append(nextword)
-            words = (words[1],words[2],nextword)
-            if count > limit or nextword.name in punctuations:
-                break
+            tmp = [words[i] for i in xrange(1,self.num)]
+            tmp.append(nextword)
+            words = tuple(tmp)
             count += 1
         
-        ## idを基に実際の文章を生成 
         return ''.join([x.name for x in sentenceid])
 
     def _get_user(self,user):
@@ -396,12 +399,15 @@ class MarkovChains(object):
 
     def _get_startword(self,userid=-1):
         sql_list = []
-        sql_list.append('select c.word1_id,w1.name,c.word2_id,w2.name,')
-        sql_list.append(' c.word3_id,w3.name,c.count')
+        sql_list.append('select ')
+        for i in xrange(self.num):
+            sql_list.append('c.word%d_id, w%d.name,' % (i+1,i+1))
+        sql_list.append(' c.count')
         sql_list.append(' from chain c')
-        sql_list.append(' inner join word w1 on c.word1_id = w1.id')
-        sql_list.append(' inner join word w2 on c.word2_id = w2.id')
-        sql_list.append(' inner join word w3 on c.word3_id = w3.id')
+        for i in xrange(self.num):
+            j = i + 1
+            sql_list.append(' inner join word w%d on c.word%d_id = w%d.id' %\
+                    (j,j,j))
         sql_list.append(self._cond_join_userchain(userid))
         sql_list.append(' where ')
         sql_list.append(' c.isstart = True')
@@ -409,28 +415,32 @@ class MarkovChains(object):
         sql_list.append(' order by rand()')
         sql_list.append(' limit 1')
 
-        self.db.execute(''.join(sql_list))
+        self.db.execute('\n'.join(sql_list))
 
         row = self.db.fetchone()
 
         result = []
-        for i in xrange(0,5,2):
-            result.append(Word(int(row[i]),row[i+1],int(row[6])))
+        for i in xrange(0,(self.num*2)-1,2):
+            result.append(Word(int(row[i]),row[i+1],int(row[(self.num*2)])))
         return tuple(result)
     
     def _get_nextwords(self,words,userid):
         sql_list = []
-        sql_list.append('select c.word3_id, w.name, c.count')
+        sql_list.append('select c.word%d_id, w.name, c.count' % (self.num))
         sql_list.append(' from chain c')
-        sql_list.append(' inner join word w on c.word3_id = w.id')
+        sql_list.append(' inner join word w on c.word%d_id = w.id' %\
+                (self.num))
         sql_list.append(self._cond_join_userchain(userid))
         sql_list.append(' where ')
-        sql_list.append(' c.word1_id = %d and' % (words[1].id))
-        sql_list.append(' c.word2_id = %d' % (words[2].id))
+        ids = []
+        for i in xrange(self.num-1):
+            ids.append(' c.word%d_id = %d' %\
+                    (i+1, words[i+1].id))
+        sql_list.append(' and'.join(ids))
         sql_list.append(self._cond_userid(userid))
         sql_list.append(' order by count desc')
 
-        self.db.execute(''.join(sql_list))
+        self.db.execute('\n'.join(sql_list))
         rows = self.db.fetchall()
         result = []
         for row in rows:

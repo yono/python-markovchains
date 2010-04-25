@@ -8,11 +8,21 @@ extractword -> http://github.com/yono/py-extractword
 settings.ini.sample を settings.ini に変更
 settings.ini にDB作成に使うユーザ名とパスワードを書いておく
 
+[全体の設定]
+settings.ini の num = 3 となってる部分を変更することで、
+マルコフ連鎖におけるN階の数を変更することができます。
+ただし、一旦DBを作成した後に元の数値より大きくするとエラーになります。
+
 [データ読み込み]
 % python mc_learn FILEorDIRECTORY
 引数には発言データが書かれたテキストファイルか，テキストファイルが入ってるディ
 レクトリを指定する．
 
+option:
+    -u, --user: ユーザーを指定
+
 [発言生成]
 % python mc_talk
 
+option:
+    -u, --user: ユーザーを指定
