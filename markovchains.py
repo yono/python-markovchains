@@ -2,8 +2,8 @@
 # -*- coding:utf-8 -*-
 import os
 from optparse import OptionParser, OptionValueError
-import copy
 from ConfigParser import SafeConfigParser
+import copy
 import random
 import MySQLdb
 from extractword import Sentence
@@ -154,10 +154,7 @@ class MarkovChains(object):
     def get_userchain(self,userid):
         sql = []
         sql.append("select")
-        ids = []
-        for i in xrange(self.num):
-            ids.append("w%d.name" % i)
-        sql.append(','.join(ids))
+        sql.append(','.join(["w%d.name" % i for i in xrange(self.num)]))
         sql.append(',uc.user_id, c.count, uc.id')
         sql.append('from chain c')
         sql.append('inner join userchain uc on uc.chain_id = c.id')
@@ -204,12 +201,9 @@ class MarkovChains(object):
 
     def _update_userchains(self,count,userchainid):
         self.db.execute('''
-            update 
-                userchain 
-            set 
-                count=%d
-            where 
-                id = %d
+            update userchain 
+            set count=%d
+            where id = %d
             ''' % (count,userchainid))
 
     def register_words(self):
@@ -406,12 +400,11 @@ class MarkovChains(object):
         sql_list.append(' where ')
         sql_list.append(' c.isstart = True')
         sql_list.append(self._cond_userid(userid))
-        sql_list.append(' order by rand()')
-        sql_list.append(' limit 1')
 
         self.db.execute('\n'.join(sql_list))
 
-        row = self.db.fetchone()
+        rows = self.db.fetchall()
+        row = random.choice(rows)
 
         result = []
         for i in xrange(0,(self.num*2)-1,2):
@@ -462,9 +455,10 @@ class MarkovChains(object):
         nextid_idx = 0
         for i in xrange(len(probs)):
             sum_prob += probs[i]
-            if randnum <= sum_prob:
+            if randnum < sum_prob:
                 nextid_idx = i
-        return words[i]
+                break
+        return words[nextid_idx]
     
 if __name__=='__main__':
     obj = MarkovChains()
