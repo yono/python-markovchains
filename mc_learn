@@ -9,10 +9,18 @@ if __name__ == '__main__':
     usage = "usage: %prog filename/dirname [options]"
     parser = OptionParser(usage)
     parser.add_option('-u','--user',action='store',help=u'発言したユーザ')
+    parser.add_option('-d','--dbname',action='store',help=u'データベース名')
+    parser.add_option('-n','--num',action='store',help=u'N階の数値')
     (options, args) = parser.parse_args()
     user = ''
+    dbname = 'markov'
+    order_num = 3
     if options.user != None:
         user = options.user
+    if options.dbname != None:
+        dbname = options.dbname
+    if options.num != None:
+        num = int(options.num)
     fileordir = os.path.join(os.environ['PWD'],sys.argv[1])
     files = []
     if os.path.isdir(fileordir):
@@ -23,7 +31,8 @@ if __name__ == '__main__':
         files.append(fileordir)
     else:
         quit()
-    m = markovchains.MarkovChains()
+
+    m = markovchains.MarkovChains(dbname,num)
     sentences = []
     print "Loading file....."
     for file in files:

@@ -17,14 +17,13 @@ class Word(object):
 
 class MarkovChains(object):
 
-    def __init__(self):
-        dbname = 'markov'
-        user, password, num = self._load_ini()
+    def __init__(self,dbname='markov',order_num=3):
+        user, password = self._load_ini()
         self.con = MySQLdb.connect(user=user,passwd=password,
                 charset='utf8',use_unicode=True)
         self.db = self.con.cursor()
 
-        self.num = num
+        self.num = order_num
 
         self._load_db(dbname)
 
@@ -39,15 +38,13 @@ class MarkovChains(object):
     def __del__(self):
         self.db.close()
         self.con.close()
- 
     
     def _load_ini(self):
         parser = SafeConfigParser()
         parser.readfp(open('settings.ini'))
         user = parser.get('mysql','user')
         password = parser.get('mysql','password')
-        num = int(parser.get('general','num'))
-        return (user,password,num)
+        return (user,password)
     
     def _load_db(self,dbname):
         self.db.execute('show databases')

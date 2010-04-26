@@ -1,6 +1,3 @@
-[general]
-num = 3
-
 [mysql]
 user = user
 password = password
