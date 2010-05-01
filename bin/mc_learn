@@ -9,10 +9,18 @@ if __name__ == '__main__':
     usage = "usage: %prog filename/dirname [options]"
     parser = OptionParser(usage)
     parser.add_option('-u','--user',action='store',help=u'発言したユーザ')
+    parser.add_option('-d','--dbname',action='store',help=u'データベース名')
+    parser.add_option('-n','--num',action='store',help=u'N階の数値')
     (options, args) = parser.parse_args()
     user = ''
+    dbname = 'markov'
+    num = 3
     if options.user != None:
         user = options.user
+    if options.dbname != None:
+        dbname = options.dbname
+    if options.num != None:
+        num = int(options.num)
     fileordir = os.path.join(os.environ['PWD'],sys.argv[1])
     files = []
     if os.path.isdir(fileordir):
@@ -23,21 +31,15 @@ if __name__ == '__main__':
         files.append(fileordir)
     else:
         quit()
-    m = markovchains.MarkovChains()
-    print fileordir
+
+    m = markovchains.MarkovChains(dbname,num)
+    sentences = []
+    print "Loading file....."
     for file in files:
-        f = open(file).read().splitlines()
         print file
-        count = 0
+        f = unicode(open(file).read(),'utf-8','ignore').splitlines()
         for line in f:
-            last = m.regist_sentence(line,user)
-            if (count % 1000) == 0:
-                print ''
-                sys.stdout.write('(%d/%d): ' % (count,len(f)))
-                sys.stdout.flush() 
-            if (count % 20) == 0:
-                sys.stdout.write('.')
-                sys.stdout.flush()
-            count += 1
-        print ''
+            last = m.analyze_sentence(line,user)
+    print "Registering data....."
+    m.register_data()
 

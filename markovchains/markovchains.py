@@ -19,6 +19,8 @@ class Word(object):
 class MarkovChains(object):
 
     def __init__(self,dbname='markov',order_num=3):
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.inifile = os.path.join(BASE_DIR, 'settings.ini')
         user, password = self._load_ini()
         self.con = MySQLdb.connect(user=user,passwd=password,
                 charset='utf8',use_unicode=True)
@@ -42,7 +44,7 @@ class MarkovChains(object):
     
     def _load_ini(self):
         parser = SafeConfigParser()
-        parser.readfp(open('settings.ini'))
+        parser.readfp(open(self.inifile))
         user = parser.get('mysql','user')
         password = parser.get('mysql','password')
         return (user,password)
