@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 import os
+import re
 from optparse import OptionParser, OptionValueError
 from ConfigParser import SafeConfigParser
 import copy
@@ -214,7 +215,10 @@ class MarkovChains(object):
         allwords = self.get_allwords()
         sql = []
         for chain in self.newchains:
-            ids = [allwords[chain[i]] for i in xrange(self.num)]
+            try:
+                ids = [allwords[chain[i]] for i in xrange(self.num)]
+            except:
+                continue
             isstart = chain[self.num]
             count = self.newchains[chain]
             if chain in self.chains:
@@ -249,7 +253,10 @@ class MarkovChains(object):
 
         sql = []
         for chain in self.newuserchains:
-            ids = [allwords[chain[i]] for i in xrange(self.num)]
+            try:
+                ids = [allwords[chain[i]] for i in xrange(self.num)]
+            except:
+                continue
             userid = chain[self.num]
             count = self.newuserchains[chain]
             chainid = chains[tuple(ids)]
@@ -283,15 +290,21 @@ class MarkovChains(object):
         if len(self.chains) == 0:
             self.chains = self.get_allchain()
 
-        words = self._get_words(text)
-        self._update_newwords_dic(words)
-        chain = self._update_newchains_dic(words)
-        
-        if user:
-            userid = self._get_user(user)
-            if len(self.userchains) == 0:
-                self.userchains = self.get_userchain(userid)
-            self._update_newuserchains_dic(chain,userid)
+        ps = self._get_punctuation()
+        ps = u'[%s]' % ('|'.join(ps.keys()))
+        ps = re.compile(ps)
+        sentences = ps.split(text)
+
+        for sentence in sentences:
+            words = self._get_words(sentence+u'。')
+            self._update_newwords_dic(words)
+            chain = self._update_newchains_dic(words)
+            
+            if user:
+                userid = self._get_user(user)
+                if len(self.userchains) == 0:
+                    self.userchains = self.get_userchain(userid)
+                self._update_newuserchains_dic(chain,userid)
 
     def _update_newwords_dic(self,words):
         for w in words:
@@ -309,7 +322,7 @@ class MarkovChains(object):
                 chain[key] = chain.get(key,0) + 1
                 c_chain.pop(0)
             c_chain.append(word)
-
+        
         rchains = {}
         for wlist in chain:
             self.newchains[wlist] = \

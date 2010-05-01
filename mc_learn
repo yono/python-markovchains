@@ -14,7 +14,7 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
     user = ''
     dbname = 'markov'
-    order_num = 3
+    num = 3
     if options.user != None:
         user = options.user
     if options.dbname != None:
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     print "Loading file....."
     for file in files:
         print file
-        f = open(file).read().splitlines()
+        f = unicode(open(file).read(),'utf-8','ignore').splitlines()
         for line in f:
             last = m.analyze_sentence(line,user)
     print "Registering data....."
