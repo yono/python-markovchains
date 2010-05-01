@@ -11,9 +11,9 @@
 ## Preparation
 
 ### DBの設定
-bin/settings.ini.sample を settings.ini に変更
-settings.ini にDB作成に使うユーザ名とパスワードを書く
-settings.ini を site-packages/markovchains/ にコピー
+1. bin/settings.ini.sample を settings.ini に変更
+2. settings.ini にDB作成に使うユーザ名とパスワードを書く
+3. settings.ini を site-packages/markovchains/ にコピー
 
 ### データ読み込み
 
