@@ -1,15 +1,24 @@
+# markovchains
+
 発言データを集めるだけでマルコフ連鎖による発言を自動生成できるようにする
+ライブラリです
 
-[使用しているライブラリ]
-MySQLdb
-extractword -> http://github.com/yono/py-extractword
+## Requirement
 
-[DBの設定]
-settings.ini.sample を settings.ini に変更
-settings.ini にDB作成に使うユーザ名とパスワードを書いておく
+- MySQLdb
+- extractword -> http://github.com/yono/py-extractword
 
-[データ読み込み]
-% python mc_learn FILEorDIRECTORY
+## Preparation
+
+### DBの設定
+bin/settings.ini.sample を settings.ini に変更
+settings.ini にDB作成に使うユーザ名とパスワードを書く
+settings.ini を site-packages/markovchains/ にコピー
+
+### データ読み込み
+
+    % mc_learn FILEorDIRECTORY
+
 引数には発言データが書かれたテキストファイルか，テキストファイルが入ってるディ
 レクトリを指定する．
 
@@ -18,8 +27,8 @@ option:
     -d, --dbname: データベース名
     -n, --num:    N階マルコフ連鎖のNの部分の数値を決定 
 
-[発言生成]
-% python mc_talk
+### 発言生成
+    % mc_talk
 
 option:
     -u, --user:   ユーザー
