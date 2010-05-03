@@ -171,7 +171,7 @@ class MarkovChains(object):
         return words
  
     def _get_punctuation(self):
-        punctuation_words = {u'。':0, u'．':0,u'？':0,u'！':0}
+        punctuation_words = {u'。':0, u'．':0,u'？':0,u'！':0,u'!':0,u'?':0}
         return punctuation_words
 
     def _insert_words(self,sql):
