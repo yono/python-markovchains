@@ -171,7 +171,8 @@ class MarkovChains(object):
         return words
  
     def _get_punctuation(self):
-        punctuation_words = {u'。':0, u'．':0,u'？':0,u'！':0,u'!':0,u'?':0}
+        punctuation_words = {u'。':0, u'．':0, u'？':0, u'！':0, u'!':0,
+                             u'?':0,  u'w':0}
         return punctuation_words
 
     def _insert_words(self,sql):
@@ -353,11 +354,11 @@ class MarkovChains(object):
             first = False
         return result
 
-    def make_sentence(self,user=''):
-        limit = 20
+    def make_sentence(self,user='',word=None):
+        limit = 1
 
         userid = self._get_userid(user)
-        words = self._get_startword(userid)
+        words = self._get_startword(userid,word)
         sentenceid = list(copy.copy(words))
 
         count = 0
@@ -398,7 +399,7 @@ class MarkovChains(object):
             userid = 0
         return userid
 
-    def _get_startword(self,userid=-1):
+    def _get_startword(self,userid=-1,word=None):
         sql_list = []
         sql_list.append('select ')
         for i in xrange(self.num):
@@ -412,6 +413,7 @@ class MarkovChains(object):
         sql_list.append(' where ')
         sql_list.append(' c.isstart = True')
         sql_list.append(self._cond_userid(userid))
+        sql_list.append(self._cond_wordname(word))
 
         self.db.execute('\n'.join(sql_list))
 
@@ -457,6 +459,12 @@ class MarkovChains(object):
         else:
             return ''
 
+    def _cond_wordname(self,word):
+        if word:
+            return ' and w0.name = "%s"' % (word)
+        else:
+            return ''
+
     def _select_nextword(self,words):
         sum_count = sum([x.count for x in words])
         probs = []
@@ -474,3 +482,4 @@ class MarkovChains(object):
     
 if __name__=='__main__':
     obj = MarkovChains()
+    print obj.make_sentence(word=u'大学')
