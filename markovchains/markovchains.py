@@ -469,16 +469,18 @@ class MarkovChains(object):
         sum_count = sum([x.count for x in words])
         probs = []
         for word in words:
-            probs.append(float(word.count)/sum_count)
+            probs.append(word)
+            probs[-1].count = float(probs[-1].count)/sum_count
+        probs.sort(lambda x,y:cmp(x.count, y.count),reverse=True)
         randnum = random.random() 
         sum_prob = 0
-        nextid_idx = 0
-        for i in xrange(len(probs)):
-            sum_prob += probs[i]
+        nextword = ''
+        for word in probs:
+            sum_prob += word.count
             if randnum < sum_prob:
-                nextid_idx = i
+                nextword = word
                 break
-        return words[nextid_idx]
+        return nextword
     
 if __name__=='__main__':
     obj = MarkovChains()
