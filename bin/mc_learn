@@ -8,9 +8,12 @@ from markovchains import markovchains
 if __name__ == '__main__':
     usage = "usage: %prog filename/dirname [options]"
     parser = OptionParser(usage)
-    parser.add_option('-u','--user',action='store',help=u'発言したユーザ')
-    parser.add_option('-d','--dbname',action='store',help=u'データベース名')
-    parser.add_option('-n','--num',action='store',help=u'N階の数値')
+    parser.add_option('-u', '--user', action='store',
+                        help=u'発言したユーザ')
+    parser.add_option('-d', '--dbname', action='store',
+                        help=u'データベース名')
+    parser.add_option('-n', '--num', action='store',
+                        help=u'N階の数値')
     (options, args) = parser.parse_args()
     user = ''
     dbname = 'markov'
@@ -21,25 +24,24 @@ if __name__ == '__main__':
         dbname = options.dbname
     if options.num != None:
         num = int(options.num)
-    fileordir = os.path.join(os.environ['PWD'],sys.argv[1])
+    fileordir = os.path.join(os.environ['PWD'], sys.argv[1])
     files = []
     if os.path.isdir(fileordir):
         files = os.listdir(fileordir)
         for i in xrange(len(files)):
-            files[i] = os.path.join(fileordir,files[i])
+            files[i] = os.path.join(fileordir, files[i])
     elif os.path.isfile(fileordir):
         files.append(fileordir)
     else:
         quit()
 
-    m = markovchains.MarkovChains(dbname,num)
+    m = markovchains.MarkovChains(dbname, num)
     sentences = []
     print "Loading file....."
     for file in files:
         print file
-        f = unicode(open(file).read(),'utf-8','ignore').splitlines()
+        f = unicode(open(file).read(), 'utf-8', 'ignore').splitlines()
         for line in f:
-            last = m.analyze_sentence(line,user)
+            last = m.analyze_sentence(line, user)
     print "Registering data....."
     m.register_data()
-

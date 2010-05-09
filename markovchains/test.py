@@ -3,6 +3,7 @@
 import unittest
 from markovchains import *
 
+
 class TestWord(unittest.TestCase):
 
     def setUp(self):
@@ -12,10 +13,11 @@ class TestWord(unittest.TestCase):
         id = 1
         name = 'name'
         count = 1
-        word = Word(id,name,count)
-        self.assert_(id,word.id)
-        self.assert_(name,word.name)
-        self.assert_(count,word.count)
+        word = Word(id, name, count)
+        self.assert_(id, word.id)
+        self.assert_(name, word.name)
+        self.assert_(count, word.count)
+
 
 class TestMarkovChains(unittest.TestCase):
 
