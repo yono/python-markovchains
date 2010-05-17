@@ -23,4 +23,5 @@ if __name__ == '__main__':
     if options.num != None:
         num = int(options.num)
     m = markovchains.MarkovChains(dbname, num)
-    print m.make_sentence(user=user)
+    m.db.load_db()
+    print m.db.make_sentence(user=user)
