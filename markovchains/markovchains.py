@@ -545,7 +545,7 @@ class MarkovChains(object):
                     count = chains[chain].count + node.count
                     self.db.update_userchains(count, id)
                 else:
-                    id = chains[chain].id
+                    id = allchains[chain].id
                     count = chains[chain].count
                     sql.append("(%d,%d,%d)" % (userid, id, count))
                     
