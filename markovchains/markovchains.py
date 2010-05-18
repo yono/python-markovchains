@@ -29,10 +29,20 @@ class Util(object):
                 break
         return nextword
 
+
 class Database(object):
 
-    def __init__(self, dbname):
+    @classmethod
+    def create(cls, db, dbname):
+        if db == 'mysql':
+            return MySQL(dbname)
+        elif db == 'postgresql':
+            pass
 
+
+class MySQL(object):
+
+    def __init__(self, dbname):
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.inifile = os.path.join(BASE_DIR, 'settings.ini')
         user, password = self._load_ini()
@@ -365,7 +375,8 @@ class MarkovChains(object):
 
         self.num = order_num
 
-        self.db = Database(dbname)
+        #self.db = Database(dbname)
+        self.db = Database.create('mysql',dbname)
 
         self.words = {}
         self.chains = {}
@@ -609,4 +620,4 @@ class MarkovChains(object):
 if __name__ == '__main__':
     obj = MarkovChains()
     obj.db.load_db()
-    print obj.make_sentence_from_db(word=u'大学')
+    print obj.db.make_sentence(word=u'大学')
