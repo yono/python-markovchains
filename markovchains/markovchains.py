@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import re
 import random
+import MySQLdb
 
 from util import *
 from database import Database
