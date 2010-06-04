@@ -4,3 +4,4 @@ setup( name = 'markovchains',
        scripts = ['bin/mc_learn','bin/mc_talk'],
        packages=['markovchains'],
      )
+

@@ -12,24 +12,15 @@ from extractword import Sentence
 
 class MarkovChains(object):
 
-    def __init__(self, dbname='markov', order_num=3):
+    def __init__(self, order_num=3):
 
         self.num = order_num
-        self.dbname = dbname
-
-        self.words = {}
-        self.chains = {}
-        self.userchains = {}
-
-        self.newwords = {}
-        self.newchains = {}
-        self.newuserchains = {}
 
         self.chaindic = {}
         self.userchaindic = {}
 
-    def load_db(self, database):
-        self.db = Database.create(database, self.dbname)
+    def load_db(self, database, dbname='markov'):
+        self.db = Database.create(database, dbname)
         self.db.load_db()
 
     def _get_punctuation(self):
@@ -219,7 +210,7 @@ class MarkovChains(object):
         while True:
             prewords = random.choice(chaindic.keys())
             postword = random.choice(chaindic[prewords].keys())
-            if chaindic[prewords][postword].is_start:
+            if chaindic[prewords][postword].isstart:
                 break
 
         words = []
@@ -256,6 +247,6 @@ class MarkovChains(object):
         return Util.select_nextword(postwords)
 
 if __name__ == '__main__':
-    obj = MarkovChains(dbname='markov3',order_num=3)
-    obj.load_db('mysql')
+    obj = MarkovChains(order_num=3)
+    obj.load_db('mysql', dbname='markov3')
     print obj.db.make_sentence()

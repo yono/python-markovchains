@@ -268,17 +268,21 @@ class PostgreSQL(object):
         return words
 
     def get_user(self, user):
-        self.cur.execute('select id from user where name = %s',(user))
+        self.cur.execute('select id from mc_user where name = %s',
+                                                            (user,))
         row = self.cur.fetchone()
         if row is None:
-            self.cur.execute("insert into user (name) values (%s)", (user))
-            self.cur.execute('select id from user where name = %s', (user))
+            self.cur.execute("insert into mc_user (name) values (%s)", 
+                                                                (user,))
+            self.cur.execute('select id from mc_user where name = %s', 
+                                                                (user,))
             row = self.cur.fetchone()
         return int(row[0])
 
     def get_userid(self, user):
         if user:
-            self.cur.execute("select id from user where name = %s", (user))
+            self.cur.execute("select id from mc_user where name = %s", 
+                                                                (user,))
             row = self.cur.fetchone()
             userid = int(row[0])
         else:

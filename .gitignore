@@ -3,3 +3,4 @@ settings.ini
 .DS_Store
 *.pyc
 build/*
+dist/*

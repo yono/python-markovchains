@@ -1,36 +1,143 @@
 # markovchains
 
-発言データを集めるだけでマルコフ連鎖による発言を自動生成できるようにする
-ライブラリです
+マルコフ連鎖による発言の自動生成を行うライブラリです
 
-## Requirement
+## 必要なライブラリ
 
-- MySQLdb
-- extractword -> http://github.com/yono/py-extractword
+- [extractword](http://github.com/yono/py-extractword)
 
-## Preparation
+### データベースを用いる場合
 
-### DBの設定
+- [MySQLdb](http://sourceforge.net/projects/mysql-python/) 
+- [psycopg2](http://initd.org/psycopg/)
+
+## インストール
+
+    % git clone git://github.com/yono/python-markovchains.git
+    % cd python-markovchains
+    % sudo python setup.py install
+
+### DBを使う場合
+
 1. bin/settings.ini.sample を settings.ini に変更
 2. settings.ini にDB作成に使うユーザ名とパスワードを書く
 3. settings.ini を site-packages/markovchains/ にコピー
 
-### データ読み込み
+## ライブラリの使い方
 
-    % mc_learn FILEorDIRECTORY
+### 文章を読み込んで発言生成
 
-引数には発言データが書かれたテキストファイルか，テキストファイルが入ってるディ
-レクトリを指定する．
+    #!/usr/bin/env python
+    # -*- coding:utf-8 -*-
+
+    from markovchains import markovchains
+
+    ## インスタンス生成
+    m = markovchains.MarkovChains()
+
+    text = u"""
+    親譲（おやゆず）りの無鉄砲（むてっぽう）で小供の時から損ばかりしている。
+    小学校に居る時分学校の二階から飛び降りて一週間ほど腰（こし）を抜（ぬ）か
+    した事がある。なぜそんな無闇（むやみ）をしたと聞く人があるかも知れぬ。別
+    段深い理由でもない。新築の二階から首を出していたら、同級生の一人が冗談（
+    じょうだん）に、いくら威張（いば）っても、そこから飛び降りる事は出来まい
+    。弱虫やーい。と囃（はや）したからである。小使（こづかい）に負ぶさって帰
+    って来た時、おやじが大きな眼（め）をして二階ぐらいから飛び降りて腰を抜か
+    す奴（やつ）があるかと云（い）ったから、この次は抜かさずに飛んで見せます
+    と答えた。
+    """
+
+    ## 文章解析
+    m.analyze_sentence(text)
+
+    ## 文章生成
+    print m.make_sentence()
+
+
+### 文章をデータベースに読み込む
+
+    #!/usr/bin/env python
+    # -*- coding:utf-8 -*-
+
+    from markovchains import markovchains
+
+    ## インスタンス生成
+    m = markovchains.MarkovChains()
+
+    text = u"""
+    親譲（おやゆず）りの無鉄砲（むてっぽう）で小供の時から損ばかりしている。
+    小学校に居る時分学校の二階から飛び降りて一週間ほど腰（こし）を抜（ぬ）か
+    した事がある。なぜそんな無闇（むやみ）をしたと聞く人があるかも知れぬ。別
+    段深い理由でもない。新築の二階から首を出していたら、同級生の一人が冗談（
+    じょうだん）に、いくら威張（いば）っても、そこから飛び降りる事は出来まい
+    。弱虫やーい。と囃（はや）したからである。小使（こづかい）に負ぶさって帰
+    って来た時、おやじが大きな眼（め）をして二階ぐらいから飛び降りて腰を抜か
+    す奴（やつ）があるかと云（い）ったから、この次は抜かさずに飛んで見せます
+    と答えた。
+    """
+
+    ## 文章解析
+    m.analyze_sentence(text)
+
+    ## DB モジュールをロード
+    m.load_db('mysql', 'markov')
+
+    ## 読み込んだ文章を DB に保存
+    m.db.register_data()
+
+### データベースに読み込んだデータから文章生成
+
+    #!/usr/bin/env python
+    # -*- coding:utf-8 -*-
+
+    from markovchains import markovchains
+
+    ## インスタンス生成
+    m = markovchains.MarkovChains()
+
+    ## DB モジュールをロード
+    m.load_db('mysql', 'markov')
+
+    ## 文章生成
+    m.db.make_sentence()
+
+## コマンドの使い方
+
+markovchains では、プログラムを書かずともマルコフ連鎖による文章生成を行えるようにライブラリの機能と対応したコマンドを用意しています。
+
+### 用意した発言データを元に発言生成
+
+発言データが書かれたファイル／ファイルが入ったディレクトリを引数にとって発言を生成します。
+
+    % mc_talk -f FILEorDIRECTORY [-n num]
+
+この機能を使う場合、データベースの設定は必要ありません。
+    
+options:
+    -n, --number 単語を組み合わせる数。この数字が小さいと支離滅裂な発言が生成されることが多くなります。逆にこの数字が大きいと日本語らしい文が生成されやすくなりますが、同じような文が何度も生成されやすくなります。
+
+### 発言データをデータベースに読み込む
+
+発言データをファイル／ファイルが入ったディレクトリからデータベースに読み込みます。読み込んだ発言データは文章生成に使うことができます。
+
+    % mc_learn FILEorDIRECTORY [-u username] [-d dbname] [-b database] [-n num]
+
+引数には発言データが書かれたテキストファイルか，テキストファイルが入ってるディレクトリを指定します。
 
 option:
-    -u, --user:   ユーザー
-    -d, --dbname: データベース名
-    -n, --num:    N階マルコフ連鎖のNの部分の数値を決定 
+    -u, --user     ユーザー
+    -d, --dbname   データベース名
+    -b, --database RDBMSの種類（mysql or postgresql）
+    -n, --num:     単語を組み合わせる数 
 
-### 発言生成
-    % mc_talk
+### データベースに読み込んだデータを元に発言生成
+
+mc_learn で読み込んだ発言データを元に文章を生成します。
+
+    % mc_talk [-u user] [-d dbname] [-b database] [-n name]
 
 option:
-    -u, --user:   ユーザー
-    -d, --dbname: データベース名
-    -n, --num:    N階マルコフ連鎖のNの部分の数値を決定 
+    -u, --user   ユーザー
+    -d, --dbname データベース名
+    -b, --database RDBMSの種類（mysql or postgresql）
+    -n, --num    単語を組み合わせる数 

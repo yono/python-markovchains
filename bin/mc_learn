@@ -3,7 +3,7 @@
 import os
 import sys
 from optparse import OptionParser, OptionValueError
-from markovchains import markovchains
+import markovchains
 
 if __name__ == '__main__':
     usage = "usage: %prog filename/dirname [options]"
@@ -14,16 +14,22 @@ if __name__ == '__main__':
                         help=u'データベース名')
     parser.add_option('-n', '--num', action='store',
                         help=u'N階の数値')
+    parser.add_option('-b', '--database', action='store',
+                        help=u'RDBMSの種類')
     (options, args) = parser.parse_args()
     user = ''
     dbname = 'markov'
     num = 3
+    database = 'mysql'
     if options.user != None:
         user = options.user
     if options.dbname != None:
         dbname = options.dbname
     if options.num != None:
         num = int(options.num)
+    if options.database != None:
+        database = options.database
+
     fileordir = os.path.join(os.environ['PWD'], sys.argv[1])
     files = []
     if os.path.isdir(fileordir):
@@ -35,7 +41,8 @@ if __name__ == '__main__':
     else:
         quit()
 
-    m = markovchains.MarkovChains(dbname, num)
+    m = markovchains.MarkovChains(num)
+    m.load_db(databsae,dbname)
     sentences = []
     print "Loading file....."
     for file in files:
@@ -44,4 +51,4 @@ if __name__ == '__main__':
         for line in f:
             last = m.analyze_sentence(line, user)
     print "Registering data....."
-    m.register_data()
+    m.db.register_data()

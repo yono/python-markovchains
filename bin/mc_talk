@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
+import os
 from optparse import OptionParser, OptionValueError
-from markovchains import markovchains
+import markovchains
 
 if __name__ == '__main__':
     usage = "usage: %prog filename/dirname [options]"
@@ -12,16 +13,42 @@ if __name__ == '__main__':
                     help=u'データベース名')
     parser.add_option('-n', '--num', action='store',
                     help=u'N階の数値')
+    parser.add_option('-b', '--database', action='store',
+                    help=u'RDBMSの種類')
+    parser.add_option('-f', '--fileordir', action='store',
+                    help=u'発言の元になる文')
     (options, args) = parser.parse_args()
     user = ''
     dbname = 'markov'
     order_num = 3
+    database = 'mysql'
+    fileordir = ''
     if options.user != None:
         user = options.user
     if options.dbname != None:
         dbname = options.dbname
     if options.num != None:
-        num = int(options.num)
-    m = markovchains.MarkovChains(dbname, num)
-    m.db.load_db()
-    print m.db.make_sentence(user=user)
+        order_num = int(options.num)
+    if options.database != None:
+        database = options.database
+    if options.fileordir != None:
+        fileordir = options.fileordir
+    m = markovchains.MarkovChains(order_num)
+    if fileordir:
+        files = []
+        if os.path.isdir(fileordir):
+            files = os.listdir(fileordir)
+            for i in xrange(len(files)):
+                files[i] = os.path.join(fileordir, files[i])
+        elif os.path.isfile(fileordir):
+            files.append(fileordir)
+        else:
+            quit()
+        for file in files:
+            f = unicode(open(file).read(), 'utf-8', 'ignore').splitlines()
+            for line in f:
+                m.analyze_sentence(line, user)
+        print m.make_sentence(user=user)
+    else:
+        m.load_db(database, dbname)
+        print m.db.make_sentence(user=user)
